@@ -1,0 +1,13 @@
+{
+  "display_name": "ST-StoryPhone",
+  "loading_order": 50,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "generate_interceptor": "STStoryPhoneGenerationInterceptor",
+  "author": "ST-StoryPhone contributors",
+  "version": "0.1.0",
+  "homePage": "https://github.com/your-name/ST-StoryPhone",
+  "auto_update": true
+}

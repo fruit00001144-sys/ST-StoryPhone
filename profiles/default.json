@@ -1,0 +1,61 @@
+{
+  "id": "default",
+  "displayName": "Default Story Phone",
+  "targetPhoneOwner": "{{char}}",
+  "phoneOwnerLabel": "目标角色",
+  "theme": "phoning_y2k",
+  "currentChar": {
+    "id": "char",
+    "name": "{{char}}",
+    "knows": [],
+    "doesNotKnow": []
+  },
+  "friends": [
+    {
+      "id": "best_friend",
+      "name": "好友",
+      "role": "普通好友",
+      "visibility": "public",
+      "knows": [],
+      "doesNotKnow": [],
+      "relations": []
+    },
+    {
+      "id": "classmate",
+      "name": "同学",
+      "role": "同班同学",
+      "visibility": "public",
+      "knows": [],
+      "doesNotKnow": [],
+      "relations": []
+    }
+  ],
+  "publicChannels": [
+    {
+      "id": "forum",
+      "name": "论坛",
+      "audience": "profiled_forum_readers"
+    },
+    {
+      "id": "moments",
+      "name": "朋友圈",
+      "audience": "configured_visibility"
+    }
+  ],
+  "phoneApps": ["wechat", "moments", "forum", "calendar", "memo", "target_phone"],
+  "forum": {
+    "name": "论坛",
+    "tone": "真实克制，不狗血，不全校磕CP",
+    "defaultBoard": "校园生活"
+  },
+  "calendar": {
+    "futureThreads": []
+  },
+  "visibilityDefaults": {
+    "phoneEvents": "user_only",
+    "forumPosts": "public",
+    "moments": "public",
+    "npcChats": "visible_to_npc",
+    "targetPhone": "visible_to_char"
+  }
+}
