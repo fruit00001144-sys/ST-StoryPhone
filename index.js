@@ -129,6 +129,43 @@
         element.addEventListener('pointercancel', onPointerUp);
     }
 
+    function makePanelDraggable(panel, handle) {
+        var startX = 0;
+        var startY = 0;
+        var startLeft = 0;
+        var startTop = 0;
+        var pointerId = null;
+        handle.style.touchAction = 'none';
+        handle.style.cursor = 'move';
+
+        handle.addEventListener('pointerdown', function (event) {
+            if (event.target && event.target.tagName === 'BUTTON') return;
+            pointerId = event.pointerId;
+            startX = event.clientX;
+            startY = event.clientY;
+            startLeft = panel.offsetLeft;
+            startTop = panel.offsetTop;
+            handle.setPointerCapture?.(pointerId);
+            event.preventDefault();
+        });
+
+        handle.addEventListener('pointermove', function (event) {
+            if (pointerId !== event.pointerId) return;
+            var maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth - 4);
+            var maxTop = Math.max(0, window.innerHeight - panel.offsetHeight - 4);
+            panel.style.left = clamp(startLeft + event.clientX - startX, 4, maxLeft) + 'px';
+            panel.style.top = clamp(startTop + event.clientY - startY, 48, maxTop) + 'px';
+            event.preventDefault();
+        });
+
+        handle.addEventListener('pointerup', function (event) {
+            if (pointerId !== event.pointerId) return;
+            handle.releasePointerCapture?.(pointerId);
+            pointerId = null;
+            event.preventDefault();
+        });
+    }
+
     function makeFallbackPhone() {
         var old = document.getElementById('st-story-phone-fallback');
         if (old) {
@@ -139,9 +176,9 @@
         var panel = document.createElement('section');
         panel.id = 'st-story-phone-fallback';
         panel.style.position = 'fixed';
-        panel.style.left = '50%';
-        panel.style.top = '52%';
-        panel.style.transform = 'translate(-50%, -50%)';
+        panel.style.left = '12px';
+        panel.style.top = '72px';
+        panel.style.transform = 'none';
         panel.style.zIndex = '2147483647';
         panel.style.width = 'min(360px, calc(100vw - 28px))';
         panel.style.height = 'min(690px, calc(100vh - 86px))';
@@ -154,24 +191,24 @@
         panel.style.boxShadow = '0 22px 58px rgba(54,80,120,.38), inset 0 0 0 2px rgba(255,255,255,.65)';
         panel.style.fontFamily = 'Verdana, sans-serif';
         panel.innerHTML = [
-            '<div style="height:42px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 16px;font-size:11px;font-weight:900;letter-spacing:.08em;">',
+            '<div id="st-story-phone-dragbar" style="height:42px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 16px;font-size:11px;font-weight:900;letter-spacing:.08em;">',
             '<span>STORY 5G</span>',
             '<span style="width:74px;height:22px;border-radius:999px;background:rgba(36,49,79,.86);box-shadow:inset 16px 0 0 rgba(255,255,255,.16);"></span>',
             '<button id="st-story-phone-fallback-close" type="button" style="justify-self:end;width:30px;height:24px;border:2px solid #24314f;border-radius:8px;background:#fff9df;font-weight:900;">×</button>',
             '</div>',
             '<div style="height:calc(100% - 54px);margin:0 12px 12px;border:3px solid rgba(36,49,79,.22);border-radius:28px;background:linear-gradient(90deg,rgba(255,255,255,.24) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.24) 1px,transparent 1px),linear-gradient(180deg,#f8fdff,#fff5fb 52%,#fffbea);background-size:18px 18px,18px 18px,auto;overflow:auto;padding:14px;box-sizing:border-box;">',
-            '<div style="border:2px solid rgba(36,49,79,.14);border-radius:24px;padding:18px;background:radial-gradient(circle at top right,rgba(113,207,255,.45),transparent 34%),linear-gradient(135deg,rgba(255,211,229,.78),rgba(216,255,229,.78));box-shadow:inset 0 0 0 2px rgba(255,255,255,.5);">',
+            '<div id="st-story-phone-home-card" style="border:2px solid rgba(36,49,79,.14);border-radius:24px;padding:18px;background:radial-gradient(circle at top right,rgba(113,207,255,.45),transparent 34%),linear-gradient(135deg,rgba(255,211,229,.78),rgba(216,255,229,.78));box-shadow:inset 0 0 0 2px rgba(255,255,255,.5);">',
             '<div style="font-family:Georgia,serif;font-size:34px;line-height:.92;font-weight:900;letter-spacing:-.06em;text-shadow:2px 2px 0 #fff;">Phoning<br>Phone</div>',
             '<div style="margin-top:10px;font-size:12px;font-weight:900;">ST-StoryPhone fallback shell</div>',
             '<div style="margin-top:8px;font-size:12px;">完整主体加载中；这里先作为可用手机桌面。</div>',
             '</div>',
             '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;">',
-            appButtonHtml('微信', 'chat'),
-            appButtonHtml('朋友圈', 'moments'),
-            appButtonHtml('论坛', 'forum'),
-            appButtonHtml('日历', 'calendar'),
-            appButtonHtml('备忘录', 'memo'),
-            appButtonHtml('目标手机', 'phone'),
+            appButtonHtml('微信', '💬'),
+            appButtonHtml('朋友圈', '🫧'),
+            appButtonHtml('论坛', '📌'),
+            appButtonHtml('日历', '📅'),
+            appButtonHtml('备忘录', '📝'),
+            appButtonHtml('目标手机', '📱'),
             '</div>',
             '<div id="st-story-phone-fallback-view" style="margin-top:14px;border:2px solid rgba(36,49,79,.14);border-radius:18px;background:rgba(255,255,255,.72);padding:12px;font-size:13px;line-height:1.5;">点一个应用开始。后台生成接口未接入时，不会把内容写入主聊天。</div>',
             '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">',
@@ -181,6 +218,7 @@
             '</div>',
         ].join('');
         document.body.appendChild(panel);
+        makePanelDraggable(panel, document.getElementById('st-story-phone-dragbar'));
         document.getElementById('st-story-phone-fallback-close').addEventListener('click', function () {
             panel.style.display = 'none';
         });
@@ -191,18 +229,110 @@
         });
         Array.prototype.forEach.call(panel.querySelectorAll('[data-stp-app]'), function (button) {
             button.addEventListener('click', function () {
-                var view = document.getElementById('st-story-phone-fallback-view');
                 var label = button.getAttribute('data-stp-app');
-                if (view) {
-                    view.innerHTML = '<strong>' + label + '</strong><p>这个模块已经在手机壳里打开。完整主体可用后会接入剧情状态、可见性审计和后台生成。</p>';
-                }
+                renderFallbackApp(label);
             });
         });
         return panel;
     }
 
     function appButtonHtml(label, icon) {
-        return '<button type="button" data-stp-app="' + label + '" style="min-height:82px;border:2px solid rgba(36,49,79,.16);border-radius:22px;background:rgba(255,255,255,.72);color:#24314f;font-weight:900;box-shadow:0 6px 0 rgba(36,49,79,.08);"><span style="display:block;width:38px;margin:0 auto 7px;padding:7px 0;border-radius:13px;background:#bfefff;font-size:11px;">' + icon + '</span>' + label + '</button>';
+        return '<button type="button" data-stp-app="' + label + '" style="min-height:82px;border:2px solid rgba(36,49,79,.16);border-radius:22px;background:rgba(255,255,255,.72);color:#24314f;font-weight:900;box-shadow:0 6px 0 rgba(36,49,79,.08);"><span style="display:block;width:42px;margin:0 auto 7px;padding:7px 0;border-radius:15px;background:#bfefff;font-size:22px;">' + icon + '</span>' + label + '</button>';
+    }
+
+    function renderFallbackApp(label) {
+        var view = document.getElementById('st-story-phone-fallback-view');
+        if (!view) return;
+        if (label === '微信' || label === '朋友圈') return renderFallbackWechat(label === '朋友圈' ? 'moments' : 'chat');
+        if (label === '论坛') return renderFallbackForum();
+        if (label === '日历') return renderSimpleApp('📅 日历', '今天：剧情时间同步主线。<br>未来暗线：等待主剧情推进，不提前泄露。');
+        if (label === '备忘录') return renderMemoApp();
+        if (label === '目标手机') return renderSimpleApp('📱 目标手机', '只读模式。这里将展示目标角色可见范围内的消息、备忘录和日历。');
+    }
+
+    function renderFallbackWechat(tab) {
+        var view = document.getElementById('st-story-phone-fallback-view');
+        var chat = JSON.parse(localStorage.getItem('st_story_phone_demo_chat') || '["今天主线发生的事不会自动泄露给其他NPC。"]');
+        var moments = JSON.parse(localStorage.getItem('st_story_phone_demo_moments') || '[{"author":"同学A","text":"今天走廊那边好像有点热闹。","likes":0,"comments":[]},{"author":"社团号","text":"下午活动室开放，借器材记得登记。","likes":1,"comments":["收到"]}]');
+        if (tab === 'moments') {
+            view.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px;"><button data-stp-wx-tab="chat">💬 聊天</button><button data-stp-wx-tab="moments">🫧 朋友圈</button></div>' +
+                moments.map(function (m, i) {
+                    return '<article style="border-bottom:1px dashed rgba(36,49,79,.2);padding:10px 0;"><strong>' + m.author + '</strong><p>' + m.text + '</p><small>❤️ ' + m.likes + '　评论 ' + m.comments.length + '</small><div>' + m.comments.map(function (c) { return '<p style="margin:4px 0;background:#f8fdff;border-radius:8px;padding:4px;">' + c + '</p>'; }).join('') + '</div><button data-like="' + i + '">点赞</button><button data-comment="' + i + '">评论</button></article>';
+                }).join('');
+            bindWechatTabs();
+            Array.prototype.forEach.call(view.querySelectorAll('[data-like]'), function (button) {
+                button.addEventListener('click', function () {
+                    moments[Number(button.dataset.like)].likes += 1;
+                    localStorage.setItem('st_story_phone_demo_moments', JSON.stringify(moments));
+                    renderFallbackWechat('moments');
+                });
+            });
+            Array.prototype.forEach.call(view.querySelectorAll('[data-comment]'), function (button) {
+                button.addEventListener('click', function () {
+                    var text = prompt('评论内容（只保存在手机内）：');
+                    if (!text) return;
+                    moments[Number(button.dataset.comment)].comments.push(text);
+                    localStorage.setItem('st_story_phone_demo_moments', JSON.stringify(moments));
+                    renderFallbackWechat('moments');
+                });
+            });
+            return;
+        }
+        view.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:10px;"><button data-stp-wx-tab="chat">💬 聊天</button><button data-stp-wx-tab="moments">🫧 朋友圈</button></div><div style="display:flex;flex-direction:column;gap:7px;max-height:210px;overflow:auto;">' +
+            chat.map(function (m, i) { return '<div style="align-self:' + (i % 2 ? 'flex-end' : 'flex-start') + ';max-width:82%;background:' + (i % 2 ? '#bfefff' : '#fff') + ';border:1px solid rgba(36,49,79,.12);border-radius:14px;padding:8px 10px;">' + m + '</div>'; }).join('') +
+            '</div><form id="stp-demo-chat-form" style="display:flex;gap:6px;margin-top:10px;"><input name="msg" placeholder="手机内消息..." style="flex:1;border:2px solid rgba(36,49,79,.14);border-radius:12px;padding:8px;"><button>发送</button></form>';
+        bindWechatTabs();
+        document.getElementById('stp-demo-chat-form').addEventListener('submit', function (event) {
+            event.preventDefault();
+            var text = event.target.msg.value.trim();
+            if (!text) return;
+            chat.push(text);
+            localStorage.setItem('st_story_phone_demo_chat', JSON.stringify(chat));
+            renderFallbackWechat('chat');
+        });
+    }
+
+    function bindWechatTabs() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-stp-wx-tab]'), function (button) {
+            button.addEventListener('click', function () { renderFallbackWechat(button.dataset.stpWxTab); });
+        });
+    }
+
+    function renderFallbackForum() {
+        var view = document.getElementById('st-story-phone-fallback-view');
+        var posts = JSON.parse(localStorage.getItem('st_story_phone_demo_forum') || '[{"title":"今天教学楼侧门是不是临时锁了？","body":"有人知道原因吗？别乱传，可能只是后勤维修。","floors":["1L：我也看到了。","2L：别上升，等通知吧。"]}]');
+        view.innerHTML = '<strong>📌 论坛</strong><p style="margin:.4em 0;">像贴吧一样按帖子和楼层浏览。</p>' + posts.map(function (p, i) {
+            return '<article style="border:2px solid rgba(36,49,79,.14);border-radius:14px;padding:10px;margin:8px 0;background:#fff;"><strong>' + p.title + '</strong><p>' + p.body + '</p>' + p.floors.map(function (f) { return '<div style="background:#f8fdff;margin:5px 0;padding:6px;border-radius:8px;">' + f + '</div>'; }).join('') + '<button data-floor="' + i + '">回复楼层</button></article>';
+        }).join('');
+        Array.prototype.forEach.call(view.querySelectorAll('[data-floor]'), function (button) {
+            button.addEventListener('click', function () {
+                var text = prompt('回复内容（只在论坛内）：');
+                if (!text) return;
+                var post = posts[Number(button.dataset.floor)];
+                post.floors.push((post.floors.length + 1) + 'L：' + text);
+                localStorage.setItem('st_story_phone_demo_forum', JSON.stringify(posts));
+                renderFallbackForum();
+            });
+        });
+    }
+
+    function renderMemoApp() {
+        var view = document.getElementById('st-story-phone-fallback-view');
+        var memos = JSON.parse(localStorage.getItem('st_story_phone_demo_memos') || '[]');
+        view.innerHTML = '<strong>📝 备忘录</strong><form id="stp-demo-memo-form" style="display:flex;gap:6px;margin:8px 0;"><input name="memo" placeholder="保存线索..." style="flex:1;border:2px solid rgba(36,49,79,.14);border-radius:12px;padding:8px;"><button>保存</button></form>' + memos.map(function (m) { return '<p style="background:#fff;border-radius:10px;padding:8px;">' + m + '</p>'; }).join('');
+        document.getElementById('stp-demo-memo-form').addEventListener('submit', function (event) {
+            event.preventDefault();
+            var text = event.target.memo.value.trim();
+            if (!text) return;
+            memos.unshift(text);
+            localStorage.setItem('st_story_phone_demo_memos', JSON.stringify(memos));
+            renderMemoApp();
+        });
+    }
+
+    function renderSimpleApp(title, body) {
+        var view = document.getElementById('st-story-phone-fallback-view');
+        if (view) view.innerHTML = '<strong>' + title + '</strong><p>' + body + '</p>';
     }
 
     function openPhone() {
@@ -274,7 +404,7 @@
         window.__STStoryPhoneAppLoaded = true;
         var script = document.createElement('script');
         script.type = 'module';
-        script.src = APP_SCRIPT + '?v=0.1.9';
+        script.src = APP_SCRIPT + '?v=0.2.0';
         script.onload = function () {
             showToast('ST-StoryPhone 已打开');
             var launcher = document.getElementById('st-story-phone-launcher');
@@ -303,7 +433,7 @@
             bubble: makeBubble,
             fallback: makeFallbackPhone,
             diagnostics: mountDiagnosticsPanel,
-            version: '0.1.9',
+            version: '0.2.0',
         };
         console.info(EXTENSION_ID + ' launcher loaded');
     });

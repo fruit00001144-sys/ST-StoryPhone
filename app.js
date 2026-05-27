@@ -1499,10 +1499,6 @@ class StoryPhoneApp {
 function bootStoryPhone() {
     if (globalThis.__STStoryPhoneApp) return;
     mountBootBubble();
-    if (!globalThis.SillyTavern?.getContext) {
-        setTimeout(bootStoryPhone, 500);
-        return;
-    }
     globalThis.__STStoryPhoneApp = new StoryPhoneApp();
     globalThis.__STStoryPhoneApp.start();
     document.getElementById('st-story-phone-boot-bubble')?.remove();
