@@ -75,7 +75,8 @@
 ## 文件结构
 
 - `manifest.json`：SillyTavern 扩展清单。
-- `index.js`：扩展入口和所有核心模块。
+- `index.js`：极简启动器，安装/启用后立刻在主页面显示 `Phone` 小气泡。
+- `app.js`：完整手机界面和所有核心模块，点击小气泡后加载。
 - `style.css`：NewJeans / phoning inspired 手机界面。
 - `profiles/default.json`：默认通用 profile。
 
