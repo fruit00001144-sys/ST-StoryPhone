@@ -64,6 +64,11 @@ function nowIso() {
     return new Date().toISOString();
 }
 
+function cloneValue(value) {
+    if (typeof structuredClone === 'function') return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+}
+
 function safeJsonParse(text, fallback) {
     try {
         return JSON.parse(text);
@@ -162,6 +167,16 @@ function createElement(tag, className, text) {
     return element;
 }
 
+function mountBootBubble() {
+    if (document.getElementById('st-story-phone') || document.getElementById('st-story-phone-boot-bubble')) return;
+    const bubble = createElement('button', 'stp-bubble stp-boot-bubble', 'Phone');
+    bubble.id = 'st-story-phone-boot-bubble';
+    bubble.type = 'button';
+    bubble.title = 'ST-StoryPhone 正在启动';
+    bubble.addEventListener('click', () => bootStoryPhone());
+    document.body.appendChild(bubble);
+}
+
 class StorageManager {
     constructor() {
         this.memory = {};
@@ -175,10 +190,10 @@ class StorageManager {
         const key = this.getKey(scope);
         try {
             const raw = localStorage.getItem(key);
-            if (!raw) return structuredClone(fallback);
-            return { ...structuredClone(fallback), ...safeJsonParse(raw, fallback) };
+            if (!raw) return cloneValue(fallback);
+            return { ...cloneValue(fallback), ...safeJsonParse(raw, fallback) };
         } catch {
-            return this.memory[key] || structuredClone(fallback);
+            return this.memory[key] || cloneValue(fallback);
         }
     }
 
@@ -687,12 +702,12 @@ class ProfileManager {
         const profile = extensions[EXTENSION_ID] || extensions[EXTENSION_ALIAS] || this.state.value.profile || DEFAULT_PROFILE;
         const charName = collected.characterSummary?.name || '当前角色';
         const resolved = JSON.parse(JSON.stringify({ ...DEFAULT_PROFILE, ...profile }));
-        resolved.targetPhoneOwner = String(resolved.targetPhoneOwner || '{{char}}').replaceAll('{{char}}', charName);
+        resolved.targetPhoneOwner = String(resolved.targetPhoneOwner || '{{char}}').split('{{char}}').join(charName);
         resolved.currentChar = {
             ...DEFAULT_PROFILE.currentChar,
             ...(resolved.currentChar || {}),
             id: resolved.currentChar?.id || 'char',
-            name: String(resolved.currentChar?.name || '{{char}}').replaceAll('{{char}}', charName),
+            name: String(resolved.currentChar?.name || '{{char}}').split('{{char}}').join(charName),
         };
         this.state.setProfile(resolved);
         return resolved;
@@ -879,7 +894,7 @@ class ContextInjector {
                 mes: summary,
             };
             const insertAt = Math.max(0, chat.length - 1);
-            chat.splice(insertAt, 0, structuredClone(note));
+            chat.splice(insertAt, 0, cloneValue(note));
         };
     }
 }
@@ -1371,7 +1386,7 @@ class PhoneUI {
             }
         });
         panel.querySelector('[data-export]').addEventListener('click', () => {
-            console.info(`${EXTENSION_ID} state`, structuredClone(this.state.value));
+            console.info(`${EXTENSION_ID} state`, cloneValue(this.state.value));
             this.showNotice('当前状态已输出到浏览器控制台');
         });
         wrap.append(panel);
@@ -1480,18 +1495,24 @@ class StoryPhoneApp {
 
 function bootStoryPhone() {
     if (globalThis.__STStoryPhoneApp) return;
+    mountBootBubble();
     if (!globalThis.SillyTavern?.getContext) {
         setTimeout(bootStoryPhone, 500);
         return;
     }
     globalThis.__STStoryPhoneApp = new StoryPhoneApp();
     globalThis.__STStoryPhoneApp.start();
+    document.getElementById('st-story-phone-boot-bubble')?.remove();
 }
 
 function scheduleStoryPhoneBoot() {
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bootStoryPhone, { once: true });
+        document.addEventListener('DOMContentLoaded', () => {
+            mountBootBubble();
+            bootStoryPhone();
+        }, { once: true });
     } else {
+        mountBootBubble();
         setTimeout(bootStoryPhone, 0);
     }
 
@@ -1517,16 +1538,8 @@ globalThis.STStoryPhoneDebug = {
 
 scheduleStoryPhoneBoot();
 
-export function onActivate() {
-    scheduleStoryPhoneBoot();
-}
-
-export function onEnable() {
-    scheduleStoryPhoneBoot();
-}
-
-export async function onClean() {
+globalThis.STStoryPhoneOnClean = async function STStoryPhoneOnClean() {
     Object.keys(localStorage)
         .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`))
         .forEach((key) => localStorage.removeItem(key));
-}
+};

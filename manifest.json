@@ -9,9 +9,5 @@
   "author": "ST-StoryPhone contributors",
   "version": "0.1.0",
   "homePage": "https://github.com/fruit00001144-sys/ST-StoryPhone",
-  "auto_update": true,
-  "hooks": {
-    "activate": "onActivate",
-    "enable": "onEnable"
-  }
+  "auto_update": true
 }
