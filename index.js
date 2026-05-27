@@ -41,6 +41,33 @@
         return button;
     }
 
+    function mountDiagnosticsPanel() {
+        var host = document.getElementById('extensions_settings') ||
+            document.getElementById('extensions_settings2') ||
+            document.querySelector('#extensions_settings, .extensions_settings, [id*="extensions_settings"]');
+        if (!host || document.getElementById('st-story-phone-diagnostics')) return;
+
+        var panel = document.createElement('div');
+        panel.id = 'st-story-phone-diagnostics';
+        panel.style.margin = '10px 0';
+        panel.style.padding = '10px';
+        panel.style.border = '2px solid #71cfff';
+        panel.style.borderRadius = '12px';
+        panel.style.background = '#fff9df';
+        panel.style.color = '#24314f';
+        panel.style.fontWeight = '800';
+        panel.innerHTML = 'ST-StoryPhone launcher loaded. 如果主页面没有 Phone 气泡，请点这里：<button id="st-story-phone-force-bubble" type="button">显示 Phone 气泡</button>';
+        host.prepend(panel);
+
+        var force = document.getElementById('st-story-phone-force-bubble');
+        if (force) {
+            force.addEventListener('click', function () {
+                makeBubble();
+                showToast('Phone 气泡已强制显示');
+            });
+        }
+    }
+
     function showToast(text) {
         var old = document.getElementById('st-story-phone-toast');
         if (old) old.remove();
@@ -75,7 +102,7 @@
         window.__STStoryPhoneAppLoaded = true;
         var script = document.createElement('script');
         script.type = 'module';
-        script.src = APP_SCRIPT + '?v=0.1.3';
+        script.src = APP_SCRIPT + '?v=0.1.4';
         script.onload = function () {
             showToast('ST-StoryPhone 已打开');
             var launcher = document.getElementById('st-story-phone-launcher');
@@ -92,10 +119,13 @@
     ready(function () {
         var bubble = makeBubble();
         bubble.addEventListener('click', loadFullApp);
+        mountDiagnosticsPanel();
+        setInterval(mountDiagnosticsPanel, 2000);
         window.STStoryPhoneLauncher = {
             load: loadFullApp,
             bubble: makeBubble,
-            version: '0.1.3',
+            diagnostics: mountDiagnosticsPanel,
+            version: '0.1.4',
         };
         console.info(EXTENSION_ID + ' launcher loaded');
     });
