@@ -48,7 +48,16 @@
         button.style.touchAction = 'none';
 
         document.body.appendChild(button);
-        makeDraggable(button, loadFullApp);
+        makeDraggable(button, openPhone);
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (button.__stpSuppressClick) {
+                button.__stpSuppressClick = false;
+                return;
+            }
+            openPhone();
+        }, true);
         return button;
     }
 
@@ -104,7 +113,13 @@
             element.releasePointerCapture?.(pointerId);
             pointerId = null;
             savePosition();
-            if (!moved && typeof onTap === 'function') onTap();
+            element.__stpSuppressClick = moved;
+            if (!moved && typeof onTap === 'function') {
+                setTimeout(function () {
+                    if (!element.__stpSuppressClick) onTap();
+                    element.__stpSuppressClick = false;
+                }, 0);
+            }
             event.preventDefault();
         }
 
@@ -161,6 +176,11 @@
             showToast('Phone 气泡已显示，可拖动');
         });
         return panel;
+    }
+
+    function openPhone() {
+        makeFallbackPhone();
+        loadFullApp();
     }
 
     function mountDiagnosticsPanel() {
@@ -256,7 +276,7 @@
             bubble: makeBubble,
             fallback: makeFallbackPhone,
             diagnostics: mountDiagnosticsPanel,
-            version: '0.1.7',
+            version: '0.1.8',
         };
         console.info(EXTENSION_ID + ' launcher loaded');
     });
