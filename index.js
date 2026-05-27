@@ -2,8 +2,27 @@
     'use strict';
 
     var EXTENSION_ID = 'ST-StoryPhone';
-    var currentScript = document.currentScript && document.currentScript.src ? document.currentScript.src : '';
-    var APP_SCRIPT = currentScript ? currentScript.replace(/index\.js(?:\?.*)?$/, 'app.js') : './app.js';
+    var MODULE_BASE = new URL('.', import.meta.url).href;
+    var APP_SCRIPT = new URL('app.js', MODULE_BASE).href;
+    var CORE_SCRIPT = new URL('core.js', MODULE_BASE).href;
+    var BRIDGE_SCRIPT = new URL('st-bridge.js', MODULE_BASE).href;
+    var corePromise = null;
+    var coreInstance = null;
+
+    function getCore() {
+        if (coreInstance) return Promise.resolve(coreInstance);
+        if (!corePromise) {
+            corePromise = import(CORE_SCRIPT + '?v=0.3.0').then(function (module) {
+                coreInstance = new module.StoryPhoneCore();
+                window.STStoryPhoneCore = coreInstance;
+                return coreInstance;
+            }).catch(function (error) {
+                console.error('ST-StoryPhone core failed to load', error);
+                return null;
+            });
+        }
+        return corePromise;
+    }
 
     function ready(callback) {
         if (document.readyState === 'loading') {
@@ -218,6 +237,7 @@
             '</div>',
         ].join('');
         document.body.appendChild(panel);
+        getCore();
         makePanelDraggable(panel, document.getElementById('st-story-phone-dragbar'));
         document.getElementById('st-story-phone-fallback-close').addEventListener('click', function () {
             panel.style.display = 'none';
@@ -252,8 +272,9 @@
 
     function renderFallbackWechat(tab) {
         var view = document.getElementById('st-story-phone-fallback-view');
-        var chat = JSON.parse(localStorage.getItem('st_story_phone_demo_chat') || '["今天主线发生的事不会自动泄露给其他NPC。"]');
-        var moments = JSON.parse(localStorage.getItem('st_story_phone_demo_moments') || '[{"author":"同学A","avatar":"🌿","text":"今天走廊那边好像有点热闹。","liked":false,"comments":[]},{"author":"社团号","avatar":"📷","text":"下午活动室开放，借器材记得登记。","liked":true,"comments":["收到"]}]');
+        var fallbackState = getPhoneState();
+        var chat = fallbackState.chats.char || [];
+        var moments = fallbackState.moments || [];
         var header = '<div style="height:46px;background:#ededed;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:18px;font-weight:700;"><button data-stp-wx-tab="list" style="border:0;background:transparent;font-size:20px;">‹</button><span>微信</span><span>＋</span></div>';
         if (tab === 'list') {
             var rows = [
@@ -278,7 +299,8 @@
             Array.prototype.forEach.call(view.querySelectorAll('[data-like]'), function (button) {
                 button.addEventListener('click', function () {
                     moments[Number(button.dataset.like)].liked = !moments[Number(button.dataset.like)].liked;
-                    localStorage.setItem('st_story_phone_demo_moments', JSON.stringify(moments));
+                    savePhoneStatePatch({ moments: moments });
+                    addCorePhoneEvent('phone_moments', 'moment_like', 'user', moments[Number(button.dataset.like)].author, '点赞朋友圈：' + moments[Number(button.dataset.like)].text, { public: true, char: false });
                     renderFallbackWechat('moments');
                 });
             });
@@ -287,22 +309,25 @@
                     var text = prompt('评论内容（只保存在手机内）：');
                     if (!text) return;
                     moments[Number(button.dataset.comment)].comments.push(text);
-                    localStorage.setItem('st_story_phone_demo_moments', JSON.stringify(moments));
+                    savePhoneStatePatch({ moments: moments });
+                    addCorePhoneEvent('phone_moments', 'moment_comment', 'user', moments[Number(button.dataset.comment)].author, '评论朋友圈：' + text, { public: true, char: false });
                     renderFallbackWechat('moments');
                 });
             });
             return;
         }
         view.innerHTML = '<div style="height:46px;background:#ededed;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:16px;font-weight:700;"><button data-stp-wx-tab="list" style="border:0;background:transparent;font-size:20px;">‹</button><span>目标角色</span><span>⋯</span></div><div style="display:flex;flex-direction:column;gap:10px;height:260px;overflow:auto;background:#ededed;padding:12px;">' +
-            chat.map(function (m, i) { return '<div style="align-self:' + (i % 2 ? 'flex-start' : 'flex-end') + ';display:flex;gap:8px;max-width:90%;"><span style="order:' + (i % 2 ? 0 : 2) + ';width:30px;height:30px;border-radius:4px;background:#fff;display:grid;place-items:center;">' + (i % 2 ? '👤' : '我') + '</span><span style="background:' + (i % 2 ? '#fff' : '#95ec69') + ';border-radius:6px;padding:8px 10px;color:#111;text-align:left;">' + m + '</span></div>'; }).join('') +
+            chat.map(function (m, i) { return '<div style="align-self:' + (m.sender === 'npc' ? 'flex-start' : 'flex-end') + ';display:flex;gap:8px;max-width:90%;"><span style="order:' + (m.sender === 'npc' ? 0 : 2) + ';width:30px;height:30px;border-radius:4px;background:#fff;display:grid;place-items:center;">' + (m.sender === 'npc' ? '👤' : '我') + '</span><span style="background:' + (m.sender === 'npc' ? '#fff' : '#95ec69') + ';border-radius:6px;padding:8px 10px;color:#111;text-align:left;">' + m.text + '</span></div>'; }).join('') +
             '</div><form id="stp-demo-chat-form" style="display:flex;gap:8px;background:#f7f7f7;padding:8px;"><button type="button">🎙</button><input name="msg" placeholder="" style="flex:1;border:0;border-radius:4px;padding:8px;background:#fff;"><button type="button">😊</button><button>＋</button></form>';
         bindWechatTabs();
         document.getElementById('stp-demo-chat-form').addEventListener('submit', function (event) {
             event.preventDefault();
             var text = event.target.msg.value.trim();
             if (!text) return;
-            chat.push(text);
-            localStorage.setItem('st_story_phone_demo_chat', JSON.stringify(chat));
+            chat.push({ sender: 'user', text: text, at: Date.now() });
+            fallbackState.chats.char = chat;
+            savePhoneStatePatch({ chats: fallbackState.chats });
+            addCorePhoneEvent('phone_wechat', 'wechat_message', 'user', 'char', text, { char: true, npcs: [] });
             renderFallbackWechat('chat');
         });
     }
@@ -315,13 +340,15 @@
 
     function renderFallbackForum() {
         var view = document.getElementById('st-story-phone-fallback-view');
-        var posts = JSON.parse(localStorage.getItem('st_story_phone_demo_forum') || '[{"title":"今天教学楼侧门是不是临时锁了？","body":"有人知道原因吗？别乱传，可能只是后勤维修。","floors":["1L：我也看到了。","2L：别上升，等通知吧。"]}]');
+        var fallbackState = getPhoneState();
+        var posts = fallbackState.forumPosts || [];
         view.innerHTML = '<div style="height:46px;background:#f7f7f7;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800;"><span>‹</span><span>论坛</span><button id="stp-forum-refresh">刷新</button></div>' + posts.map(function (p, i) {
             return '<article style="background:#fff;border-bottom:8px solid #f2f3f5;padding:12px;"><strong style="font-size:16px;color:#1f3f73;">' + p.title + '</strong><p style="color:#222;">' + p.body + '</p>' + p.floors.map(function (f) { return '<div style="border-top:1px solid #eee;padding:8px 0;color:#333;">' + f + '</div>'; }).join('') + '<button data-floor="' + i + '">回复楼层</button></article>';
         }).join('');
         document.getElementById('stp-forum-refresh').addEventListener('click', function () {
             posts.unshift({ title: '新的讨论串正在生成…', body: getApiConfigured() ? '已请求扩展 API。' : '后台生成接口未接入，显示本地占位。', floors: ['1L：先观察，不要默认全员知道。'] });
-            localStorage.setItem('st_story_phone_demo_forum', JSON.stringify(posts));
+            savePhoneStatePatch({ forumPosts: posts });
+            addCorePhoneEvent('phone_forum', 'forum_refresh', 'system', null, posts[0].title, { public: true });
             renderFallbackForum();
         });
         Array.prototype.forEach.call(view.querySelectorAll('[data-floor]'), function (button) {
@@ -330,7 +357,8 @@
                 if (!text) return;
                 var post = posts[Number(button.dataset.floor)];
                 post.floors.push((post.floors.length + 1) + 'L：' + text);
-                localStorage.setItem('st_story_phone_demo_forum', JSON.stringify(posts));
+                savePhoneStatePatch({ forumPosts: posts });
+                addCorePhoneEvent('phone_forum', 'forum_reply', 'user', post.title, text, { public: true });
                 renderFallbackForum();
             });
         });
@@ -338,14 +366,16 @@
 
     function renderMemoApp() {
         var view = document.getElementById('st-story-phone-fallback-view');
-        var memos = JSON.parse(localStorage.getItem('st_story_phone_demo_memos') || '[]');
+        var fallbackState = getPhoneState();
+        var memos = fallbackState.memos || [];
         view.innerHTML = '<div style="background:#f7f2df;min-height:320px;padding:14px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:center;"><strong style="font-size:22px;">备忘录</strong><span>📝</span></div><form id="stp-demo-memo-form" style="display:flex;gap:6px;margin:12px 0;"><input name="memo" placeholder="保存线索..." style="flex:1;border:0;border-radius:10px;padding:10px;background:#fffdf5;"><button style="border:0;background:#ffd84d;border-radius:10px;padding:0 12px;">保存</button></form>' + memos.map(function (m) { return '<p style="background:#fffdf5;border-radius:12px;padding:10px;box-shadow:0 1px 0 rgba(0,0,0,.06);">' + m + '</p>'; }).join('') + '</div>';
         document.getElementById('stp-demo-memo-form').addEventListener('submit', function (event) {
             event.preventDefault();
             var text = event.target.memo.value.trim();
             if (!text) return;
             memos.unshift(text);
-            localStorage.setItem('st_story_phone_demo_memos', JSON.stringify(memos));
+            savePhoneStatePatch({ memos: memos });
+            addCorePhoneEvent('phone_memo', 'memo_add', 'user', null, text, { user: true });
             renderMemoApp();
         });
     }
@@ -357,6 +387,35 @@
 
     function getApiConfigured() {
         return Boolean(localStorage.getItem('st_story_phone_api_endpoint'));
+    }
+
+    function getPhoneState() {
+        if (coreInstance?.state?.phone) return coreInstance.state.phone;
+        return {
+            chats: { char: [{ sender: 'npc', text: '这里是手机内消息，不会直接进入主聊天。', at: Date.now() }] },
+            moments: [
+                { id: 'm1', author: '同学A', avatar: '🌿', text: '今天走廊那边好像有点热闹。', liked: false, comments: [] },
+                { id: 'm2', author: '社团号', avatar: '📷', text: '下午活动室开放，借器材记得登记。', liked: true, comments: ['收到'] },
+            ],
+            forumPosts: [
+                { id: 'f1', title: '今天教学楼侧门是不是临时锁了？', body: '有人知道原因吗？别乱传，可能只是后勤维修。', floors: ['1L：我也看到了。', '2L：别上升，等通知吧。'] },
+            ],
+            memos: [],
+            calendar: [],
+        };
+    }
+
+    function savePhoneStatePatch(patch) {
+        if (!coreInstance?.state?.phone) return;
+        Object.assign(coreInstance.state.phone, patch);
+        coreInstance.save();
+    }
+
+    function addCorePhoneEvent(source, type, actor, target, content, visibility) {
+        getCore().then(function (core) {
+            if (!core) return;
+            core.addEvent({ source: source, type: type, actor: actor, target: target, content: content, visibility: visibility });
+        });
     }
 
     function openPhone() {
@@ -405,6 +464,9 @@
         if (saveApi) {
             saveApi.addEventListener('click', function () {
                 localStorage.setItem('st_story_phone_api_endpoint', endpointInput.value.trim());
+                getCore().then(function (core) {
+                    if (core) core.setApiEndpoint(endpointInput.value.trim());
+                });
                 showToast(endpointInput.value.trim() ? 'StoryPhone API 已保存' : 'StoryPhone API 已关闭');
             });
         }
@@ -444,10 +506,7 @@
         }
 
         window.__STStoryPhoneAppLoaded = true;
-        var script = document.createElement('script');
-        script.type = 'module';
-        script.src = APP_SCRIPT + '?v=0.2.1';
-        script.onload = function () {
+        import(APP_SCRIPT + '?v=0.3.0').then(function () {
             showToast('ST-StoryPhone 已打开');
             var launcher = document.getElementById('st-story-phone-launcher');
             if (launcher) launcher.remove();
@@ -457,13 +516,11 @@
                     showToast('完整手机未挂载，已打开最小手机面板');
                 }
             }, 1200);
-        };
-        script.onerror = function (error) {
+        }).catch(function (error) {
             window.__STStoryPhoneAppLoaded = false;
             console.error('ST-StoryPhone full app failed to load:', error);
             showToast('手机主体加载失败，但气泡已工作。请看控制台错误。');
-        };
-        document.head.appendChild(script);
+        });
     }
 
     ready(function () {
@@ -475,8 +532,17 @@
             bubble: makeBubble,
             fallback: makeFallbackPhone,
             diagnostics: mountDiagnosticsPanel,
-            version: '0.2.1',
+            core: function () { return coreInstance; },
+            version: '0.3.0',
         };
+        getCore().then(function (core) {
+            if (!core) return;
+            import(BRIDGE_SCRIPT + '?v=0.3.0').then(function (bridge) {
+                bridge.installGenerateInterceptor(function (speakerId) {
+                    return core.mainContextSummary(speakerId);
+                });
+            });
+        });
         console.info(EXTENSION_ID + ' launcher loaded');
     });
 })();

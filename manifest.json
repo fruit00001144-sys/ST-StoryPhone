@@ -5,8 +5,9 @@
   "optional": [],
   "js": "index.js",
   "css": "style.css",
+  "generate_interceptor": "STStoryPhoneGenerationInterceptor",
   "author": "ST-StoryPhone contributors",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "homePage": "https://github.com/fruit00001144-sys/000-ST-StoryPhone",
   "auto_update": true
 }
