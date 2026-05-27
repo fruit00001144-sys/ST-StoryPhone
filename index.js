@@ -2,7 +2,7 @@
     'use strict';
 
     var EXTENSION_ID = 'ST-StoryPhone';
-    var APP_SCRIPT = './scripts/extensions/third-party/ST-StoryPhone/app.js';
+    var APP_SCRIPT = '/scripts/extensions/third-party/ST-StoryPhone/app.js';
 
     function ready(callback) {
         if (document.readyState === 'loading') {
@@ -73,17 +73,20 @@
         }
 
         window.__STStoryPhoneAppLoaded = true;
-        import(APP_SCRIPT)
-            .then(function () {
-                showToast('ST-StoryPhone 已打开');
-                var launcher = document.getElementById('st-story-phone-launcher');
-                if (launcher) launcher.remove();
-            })
-            .catch(function (error) {
-                window.__STStoryPhoneAppLoaded = false;
-                console.error('ST-StoryPhone full app failed to load:', error);
-                showToast('手机主体加载失败，但气泡已工作。请看控制台错误。');
-            });
+        var script = document.createElement('script');
+        script.type = 'module';
+        script.src = APP_SCRIPT + '?v=0.1.3';
+        script.onload = function () {
+            showToast('ST-StoryPhone 已打开');
+            var launcher = document.getElementById('st-story-phone-launcher');
+            if (launcher) launcher.remove();
+        };
+        script.onerror = function (error) {
+            window.__STStoryPhoneAppLoaded = false;
+            console.error('ST-StoryPhone full app failed to load:', error);
+            showToast('手机主体加载失败，但气泡已工作。请看控制台错误。');
+        };
+        document.head.appendChild(script);
     }
 
     ready(function () {
@@ -92,7 +95,7 @@
         window.STStoryPhoneLauncher = {
             load: loadFullApp,
             bubble: makeBubble,
-            version: '0.1.2',
+            version: '0.1.3',
         };
         console.info(EXTENSION_ID + ' launcher loaded');
     });
