@@ -1,5 +1,7 @@
 /* global SillyTavern */
 
+import stGetContext from '../../../st-context.js';
+
 const EXTENSION_ID = 'ST-StoryPhone';
 const EXTENSION_ALIAS = 'ST-PhoningPhone';
 const STORAGE_PREFIX = 'st_story_phone';
@@ -156,6 +158,7 @@ function contentNeedles(text) {
 }
 
 function getContext() {
+    if (typeof stGetContext === 'function') return stGetContext() || {};
     if (!globalThis.SillyTavern?.getContext) return {};
     return globalThis.SillyTavern.getContext() || {};
 }
