@@ -508,6 +508,9 @@ class SharedStoryState {
                 fallbackEnabled: false,
                 injectIntoMainContext: true,
                 minimized: false,
+                apiEndpoint: localStorage.getItem('st_story_phone_api_endpoint') || '',
+                apiKey: localStorage.getItem('st_story_phone_api_key') || '',
+                apiModel: localStorage.getItem('st_story_phone_api_model') || '',
             },
             profile: DEFAULT_PROFILE,
         };
@@ -738,6 +741,17 @@ class BackgroundGenerator {
         const speakerContext = auditor.resolveVisibleContext(speakerId);
         const quietPrompt = this.buildPrompt(taskType, payload, collected, speakerContext);
 
+        if (this.state.value.settings.apiEndpoint) {
+            const apiResult = await this.generateViaConfiguredApi(quietPrompt, taskType, speakerId, speakerContext);
+            if (apiResult.ok) return apiResult;
+            return {
+                ok: false,
+                message: apiResult.message || '自定义 API 调用失败',
+                items: [],
+                audit: apiResult.audit,
+            };
+        }
+
         if (typeof context.generateQuietPrompt === 'function') {
             const first = await this.generateAndAudit(context, quietPrompt, taskType, speakerId, speakerContext);
             if (first.ok) return first;
@@ -768,6 +782,91 @@ class BackgroundGenerator {
         const fallback = this.templateFallback(taskType, payload);
         fallback.visibilityContext = speakerContext;
         return fallback;
+    }
+
+    getApiHeaders() {
+        const headers = { 'Content-Type': 'application/json' };
+        if (this.state.value.settings.apiKey) headers.Authorization = `Bearer ${this.state.value.settings.apiKey}`;
+        return headers;
+    }
+
+    getChatCompletionsUrl() {
+        const endpoint = String(this.state.value.settings.apiEndpoint || '').trim().replace(/\/+$/, '');
+        if (!endpoint) return '';
+        if (endpoint.endsWith('/chat/completions')) return endpoint;
+        if (endpoint.endsWith('/v1')) return `${endpoint}/chat/completions`;
+        if (endpoint.includes('/v1/')) return `${endpoint}/chat/completions`;
+        return `${endpoint}/v1/chat/completions`;
+    }
+
+    async generateViaConfiguredApi(quietPrompt, taskType, speakerId, speakerContext) {
+        try {
+            let raw;
+            if (this.state.value.settings.apiModel) {
+                const response = await fetch(this.getChatCompletionsUrl(), {
+                    method: 'POST',
+                    headers: this.getApiHeaders(),
+                    body: JSON.stringify({
+                        model: this.state.value.settings.apiModel,
+                        messages: [
+                            { role: 'system', content: '你是 ST-StoryPhone 手机后台生成器。只输出 JSON，不要 Markdown。' },
+                            { role: 'user', content: quietPrompt },
+                        ],
+                        temperature: 0.7,
+                    }),
+                });
+                raw = await response.text();
+                const data = safeJsonParse(raw, { text: raw });
+                if (!response.ok) throw new Error(data.error?.message || `${response.status} ${response.statusText}`);
+                raw = data.choices?.[0]?.message?.content || data.text || raw;
+            } else {
+                const response = await fetch(this.state.value.settings.apiEndpoint, {
+                    method: 'POST',
+                    headers: this.getApiHeaders(),
+                    body: JSON.stringify({ taskType, prompt: quietPrompt, visibleContext: speakerContext }),
+                });
+                raw = await response.text();
+                const data = safeJsonParse(raw, { text: raw });
+                if (!response.ok) throw new Error(data.error?.message || `${response.status} ${response.statusText}`);
+                raw = data.choices?.[0]?.message?.content || data.text || raw;
+            }
+
+            const parsed = this.parseGeneratedResult(taskType, raw);
+            const audit = new KnowledgeTimelineAuditor(this.state.value)
+                .auditKnowledgeConsistency(JSON.stringify(parsed.items), speakerId, speakerContext);
+            return { ...parsed, ok: parsed.ok && audit.ok, audit, visibilityContext: speakerContext };
+        } catch (error) {
+            return { ok: false, message: `自定义 API 调用失败：${error.message}`, items: [] };
+        }
+    }
+
+    async testApiConnection() {
+        if (!this.state.value.settings.apiEndpoint) return { ok: false, message: '请先填写 API URL' };
+        try {
+            if (this.state.value.settings.apiModel) {
+                const response = await fetch(this.getChatCompletionsUrl(), {
+                    method: 'POST',
+                    headers: this.getApiHeaders(),
+                    body: JSON.stringify({
+                        model: this.state.value.settings.apiModel,
+                        messages: [{ role: 'user', content: '只输出 {"ok":true,"message":"pong"}' }],
+                        temperature: 0,
+                    }),
+                });
+                if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+                return { ok: true, message: 'API 测试成功' };
+            }
+
+            const response = await fetch(this.state.value.settings.apiEndpoint, {
+                method: 'POST',
+                headers: this.getApiHeaders(),
+                body: JSON.stringify({ taskType: 'connection_test', prompt: 'ping' }),
+            });
+            if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+            return { ok: true, message: 'API 测试成功' };
+        } catch (error) {
+            return { ok: false, message: `API 测试失败：${error.message}` };
+        }
     }
 
     resolveSpeakerId(taskType, payload) {
@@ -1042,7 +1141,12 @@ class PhoneUI {
         if (!current) {
             chatPane.append(createElement('p', 'stp-empty', '暂无好友。可在角色卡 phone profile 中配置 friends。'));
         } else {
-            const history = this.state.value.phone.chats[current.id] || [];
+            const history = asArray(this.state.value.phone.chats[current.id]).map((message) => {
+                if (typeof message === 'string') return { sender: 'user', content: message, at: nowIso() };
+                return { ...message, sender: message.sender === 'user' ? 'user' : 'npc', content: message.content || message.text || '' };
+            });
+            this.state.value.phone.chats[current.id] = history;
+            this.state.save();
             const messages = createElement('div', 'stp-messages');
             history.forEach((message) => {
                 const bubble = createElement('div', `stp-message ${message.sender === 'user' ? 'me' : 'npc'}`);
@@ -1051,10 +1155,11 @@ class PhoneUI {
             });
             const form = createElement('form', 'stp-reply-box');
             form.innerHTML = `
-                <input type="text" placeholder="只在手机内发送..." />
+                <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="只在手机内发送..." />
                 <button class="stp-pixel-button" type="submit">发送</button>
                 <button class="stp-pixel-button ghost" type="button" data-generate>生成回复</button>
             `;
+            form.setAttribute('autocomplete', 'off');
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
                 const input = form.querySelector('input');
@@ -1370,6 +1475,12 @@ class PhoneUI {
         panel.innerHTML = `
             <label><input type="checkbox" data-setting="injectIntoMainContext" ${settings.injectIntoMainContext ? 'checked' : ''}> 手机事件隐藏摘要同步到主对话</label>
             <label><input type="checkbox" data-setting="fallbackEnabled" ${settings.fallbackEnabled ? 'checked' : ''}> 开启本地 fallback（默认关闭）</label>
+            <label>API URL<input data-api="endpoint" autocomplete="off" value="${settings.apiEndpoint || ''}" placeholder="http://127.0.0.1:5100/v1 或 /chat/completions"></label>
+            <label>API Key<input data-api="key" type="password" autocomplete="off" value="${settings.apiKey || ''}" placeholder="可选，只保存在本地"></label>
+            <label>模型名<input data-api="model" autocomplete="off" value="${settings.apiModel || ''}" placeholder="OpenAI 兼容接口需要"></label>
+            <button class="stp-pixel-button" type="button" data-save-api>保存 API</button>
+            <button class="stp-pixel-button ghost" type="button" data-test-api>测试连接</button>
+            <p class="stp-empty" data-api-status>默认不外发；填写 URL 后才会发送可见上下文到该接口。</p>
             <textarea rows="7" placeholder="粘贴角色 phone profile JSON"></textarea>
             <button class="stp-pixel-button" type="button" data-import>导入 Profile</button>
             <button class="stp-pixel-button ghost" type="button" data-export>导出当前状态到控制台</button>
@@ -1379,6 +1490,24 @@ class PhoneUI {
                 this.state.value.settings[input.dataset.setting] = input.checked;
                 this.state.save();
             });
+        });
+        panel.querySelector('[data-save-api]').addEventListener('click', () => {
+            settings.apiEndpoint = panel.querySelector('[data-api="endpoint"]').value.trim();
+            settings.apiKey = panel.querySelector('[data-api="key"]').value.trim();
+            settings.apiModel = panel.querySelector('[data-api="model"]').value.trim();
+            localStorage.setItem('st_story_phone_api_endpoint', settings.apiEndpoint);
+            localStorage.setItem('st_story_phone_api_key', settings.apiKey);
+            localStorage.setItem('st_story_phone_api_model', settings.apiModel);
+            this.state.save();
+            this.showNotice(settings.apiEndpoint ? 'API 设置已保存' : 'API 已关闭');
+        });
+        panel.querySelector('[data-test-api]').addEventListener('click', async () => {
+            panel.querySelector('[data-save-api]').click();
+            const status = panel.querySelector('[data-api-status]');
+            status.textContent = '正在测试 API...';
+            const result = await this.generator.testApiConnection();
+            status.textContent = result.message;
+            this.showNotice(result.message);
         });
         panel.querySelector('[data-import]').addEventListener('click', () => {
             try {

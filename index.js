@@ -2,6 +2,7 @@
     'use strict';
 
     var EXTENSION_ID = 'ST-StoryPhone';
+    var EXTENSION_VERSION = '0.3.2';
     var MODULE_BASE = new URL('.', import.meta.url).href;
     var APP_SCRIPT = new URL('app.js', MODULE_BASE).href;
     var CORE_SCRIPT = new URL('core.js', MODULE_BASE).href;
@@ -12,7 +13,7 @@
     function getCore() {
         if (coreInstance) return Promise.resolve(coreInstance);
         if (!corePromise) {
-            corePromise = import(CORE_SCRIPT + '?v=0.3.0').then(function (module) {
+            corePromise = import(CORE_SCRIPT + '?v=' + EXTENSION_VERSION).then(function (module) {
                 coreInstance = new module.StoryPhoneCore();
                 window.STStoryPhoneCore = coreInstance;
                 return coreInstance;
@@ -34,7 +35,10 @@
 
     function makeBubble() {
         var old = document.getElementById('st-story-phone-launcher');
-        if (old) return old;
+        if (old) {
+            bindBubbleOpenEvents(old);
+            return old;
+        }
         var saved = {};
         try {
             saved = JSON.parse(localStorage.getItem('st_story_phone_launcher_pos') || '{}');
@@ -65,10 +69,17 @@
         button.style.fontFamily = 'Verdana, sans-serif';
         button.style.pointerEvents = 'auto';
         button.style.touchAction = 'none';
-
         document.body.appendChild(button);
         makeDraggable(button, openPhone);
-        button.addEventListener('click', function (event) {
+        bindBubbleOpenEvents(button);
+        return button;
+    }
+
+    function bindBubbleOpenEvents(button) {
+        if (button.__stpOpenBound) return;
+        button.__stpOpenBound = true;
+        button.dataset.stpReady = 'true';
+        function openFromEvent(event) {
             event.preventDefault();
             event.stopPropagation();
             if (button.__stpSuppressClick) {
@@ -76,8 +87,12 @@
                 return;
             }
             openPhone();
+        }
+        button.addEventListener('click', openFromEvent, true);
+        button.addEventListener('touchend', openFromEvent, true);
+        button.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') openFromEvent(event);
         }, true);
-        return button;
     }
 
     function clamp(value, min, max) {
@@ -273,7 +288,9 @@
     function renderFallbackWechat(tab) {
         var view = document.getElementById('st-story-phone-fallback-view');
         var fallbackState = getPhoneState();
-        var chat = fallbackState.chats.char || [];
+        var chat = normalizeChatHistory(fallbackState.chats.char || []);
+        fallbackState.chats.char = chat;
+        savePhoneStatePatch({ chats: fallbackState.chats });
         var moments = fallbackState.moments || [];
         var header = '<div style="height:46px;background:#ededed;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:18px;font-weight:700;"><button data-stp-wx-tab="list" style="border:0;background:transparent;font-size:20px;">‹</button><span>微信</span><span>＋</span></div>';
         if (tab === 'list') {
@@ -317,13 +334,14 @@
             return;
         }
         view.innerHTML = '<div style="height:46px;background:#ededed;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:16px;font-weight:700;"><button data-stp-wx-tab="list" style="border:0;background:transparent;font-size:20px;">‹</button><span>目标角色</span><span>⋯</span></div><div style="display:flex;flex-direction:column;gap:10px;height:260px;overflow:auto;background:#ededed;padding:12px;">' +
-            chat.map(function (m, i) { return '<div style="align-self:' + (m.sender === 'npc' ? 'flex-start' : 'flex-end') + ';display:flex;gap:8px;max-width:90%;"><span style="order:' + (m.sender === 'npc' ? 0 : 2) + ';width:30px;height:30px;border-radius:4px;background:#fff;display:grid;place-items:center;">' + (m.sender === 'npc' ? '👤' : '我') + '</span><span style="background:' + (m.sender === 'npc' ? '#fff' : '#95ec69') + ';border-radius:6px;padding:8px 10px;color:#111;text-align:left;">' + m.text + '</span></div>'; }).join('') +
-            '</div><form id="stp-demo-chat-form" style="display:flex;gap:8px;background:#f7f7f7;padding:8px;"><button type="button">🎙</button><input name="msg" placeholder="" style="flex:1;border:0;border-radius:4px;padding:8px;background:#fff;"><button type="button">😊</button><button>＋</button></form>';
+            chat.map(function (m) { return '<div style="align-self:' + (m.sender === 'npc' ? 'flex-start' : 'flex-end') + ';display:flex;gap:8px;max-width:90%;"><span style="order:' + (m.sender === 'npc' ? 0 : 2) + ';width:30px;height:30px;border-radius:4px;background:#fff;display:grid;place-items:center;">' + (m.sender === 'npc' ? '👤' : '我') + '</span><span style="background:' + (m.sender === 'npc' ? '#fff' : '#95ec69') + ';border-radius:6px;padding:8px 10px;color:#111;text-align:left;">' + escapeHtml(m.text || m.content || '') + '</span></div>'; }).join('') +
+            '</div><form id="stp-demo-chat-form" autocomplete="off" style="display:flex;gap:8px;background:#f7f7f7;padding:8px;"><button type="button">🎙</button><input name="msg" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="" style="flex:1;border:0;border-radius:4px;padding:8px;background:#fff;"><button type="button">😊</button><button>＋</button></form>';
         bindWechatTabs();
         document.getElementById('stp-demo-chat-form').addEventListener('submit', function (event) {
             event.preventDefault();
             var text = event.target.msg.value.trim();
             if (!text) return;
+            event.target.msg.value = '';
             chat.push({ sender: 'user', text: text, at: Date.now() });
             fallbackState.chats.char = chat;
             savePhoneStatePatch({ chats: fallbackState.chats });
@@ -389,6 +407,23 @@
         return Boolean(localStorage.getItem('st_story_phone_api_endpoint'));
     }
 
+    function normalizeChatHistory(history) {
+        return history.map(function (message) {
+            if (typeof message === 'string') return { sender: 'user', text: message, at: Date.now() };
+            return {
+                sender: message.sender === 'user' ? 'user' : 'npc',
+                text: message.text || message.content || '',
+                at: message.at || Date.now(),
+            };
+        });
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, function (char) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+        });
+    }
+
     function getPhoneState() {
         if (coreInstance?.state?.phone) return coreInstance.state.phone;
         return {
@@ -442,10 +477,15 @@
             'ST-StoryPhone launcher loaded. 如果主页面没有 Phone 气泡，请点这里：',
             '<button id="st-story-phone-force-bubble" type="button">显示/打开 Phone</button>',
             '<details style="margin-top:8px;"><summary>StoryPhone API 设置</summary>',
-            '<label style="display:block;margin-top:6px;">后台生成接口 Endpoint（可选，默认关闭）</label>',
-            '<input id="st-story-phone-api-endpoint" placeholder="例如 http://127.0.0.1:5100/storyphone" style="width:100%;box-sizing:border-box;border:2px solid #71cfff;border-radius:8px;padding:6px;">',
-            '<button id="st-story-phone-api-save" type="button" style="margin-top:6px;">保存 API 设置</button>',
-            '<p style="font-size:12px;margin:.4em 0;">不填写时只用本地手机交互；填写后才会把可见上下文发送到你配置的接口。</p>',
+            '<label style="display:block;margin-top:6px;">API URL（OpenAI 兼容可填 base URL 或 /v1/chat/completions）</label>',
+            '<input id="st-story-phone-api-endpoint" autocomplete="off" placeholder="例如 http://127.0.0.1:5100/v1" style="width:100%;box-sizing:border-box;border:2px solid #71cfff;border-radius:8px;padding:6px;">',
+            '<label style="display:block;margin-top:6px;">API Key（可选，只保存在本地浏览器）</label>',
+            '<input id="st-story-phone-api-key" type="password" autocomplete="off" placeholder="sk-..." style="width:100%;box-sizing:border-box;border:2px solid #71cfff;border-radius:8px;padding:6px;">',
+            '<label style="display:block;margin-top:6px;">模型名（OpenAI 兼容接口需要）</label>',
+            '<input id="st-story-phone-api-model" autocomplete="off" placeholder="例如 gpt-4.1-mini / claude..." style="width:100%;box-sizing:border-box;border:2px solid #71cfff;border-radius:8px;padding:6px;">',
+            '<button id="st-story-phone-api-save" type="button" style="margin-top:6px;">保存 API 设置</button> ',
+            '<button id="st-story-phone-api-test" type="button" style="margin-top:6px;">测试连接</button>',
+            '<p id="st-story-phone-api-status" style="font-size:12px;margin:.4em 0;">不填写时只用本地手机交互；填写后才会把可见上下文发送到你配置的接口。</p>',
             '</details>',
         ].join('');
         host.prepend(panel);
@@ -459,15 +499,49 @@
             });
         }
         var endpointInput = document.getElementById('st-story-phone-api-endpoint');
+        var keyInput = document.getElementById('st-story-phone-api-key');
+        var modelInput = document.getElementById('st-story-phone-api-model');
         var saveApi = document.getElementById('st-story-phone-api-save');
+        var testApi = document.getElementById('st-story-phone-api-test');
+        var apiStatus = document.getElementById('st-story-phone-api-status');
         if (endpointInput) endpointInput.value = localStorage.getItem('st_story_phone_api_endpoint') || '';
+        if (keyInput) keyInput.value = localStorage.getItem('st_story_phone_api_key') || '';
+        if (modelInput) modelInput.value = localStorage.getItem('st_story_phone_api_model') || '';
         if (saveApi) {
             saveApi.addEventListener('click', function () {
-                localStorage.setItem('st_story_phone_api_endpoint', endpointInput.value.trim());
+                var settings = {
+                    endpoint: endpointInput.value.trim(),
+                    key: keyInput.value.trim(),
+                    model: modelInput.value.trim(),
+                };
+                localStorage.setItem('st_story_phone_api_endpoint', settings.endpoint);
+                localStorage.setItem('st_story_phone_api_key', settings.key);
+                localStorage.setItem('st_story_phone_api_model', settings.model);
                 getCore().then(function (core) {
-                    if (core) core.setApiEndpoint(endpointInput.value.trim());
+                    if (core?.setApiSettings) core.setApiSettings(settings);
                 });
-                showToast(endpointInput.value.trim() ? 'StoryPhone API 已保存' : 'StoryPhone API 已关闭');
+                showToast(settings.endpoint ? 'StoryPhone API 已保存' : 'StoryPhone API 已关闭');
+            });
+        }
+        if (testApi) {
+            testApi.addEventListener('click', function () {
+                apiStatus.textContent = '正在测试 API...';
+                var settings = {
+                    endpoint: endpointInput.value.trim(),
+                    key: keyInput.value.trim(),
+                    model: modelInput.value.trim(),
+                };
+                getCore().then(function (core) {
+                    if (!core?.testApiConnection) throw new Error('核心模块未加载');
+                    core.setApiSettings(settings);
+                    return core.testApiConnection();
+                }).then(function (result) {
+                    apiStatus.textContent = result.message;
+                    showToast(result.message);
+                }).catch(function (error) {
+                    apiStatus.textContent = 'API 测试失败：' + error.message;
+                    showToast('API 测试失败');
+                });
             });
         }
     }
@@ -506,7 +580,7 @@
         }
 
         window.__STStoryPhoneAppLoaded = true;
-        import(APP_SCRIPT + '?v=0.3.0').then(function () {
+        import(APP_SCRIPT + '?v=' + EXTENSION_VERSION).then(function () {
             showToast('ST-StoryPhone 已打开');
             var launcher = document.getElementById('st-story-phone-launcher');
             if (launcher) launcher.remove();
@@ -524,20 +598,31 @@
     }
 
     ready(function () {
-        var bubble = makeBubble();
-        mountDiagnosticsPanel();
-        setInterval(mountDiagnosticsPanel, 2000);
         window.STStoryPhoneLauncher = {
             load: loadFullApp,
             bubble: makeBubble,
             fallback: makeFallbackPhone,
             diagnostics: mountDiagnosticsPanel,
             core: function () { return coreInstance; },
-            version: '0.3.0',
+            version: EXTENSION_VERSION,
         };
+        document.addEventListener('click', function (event) {
+            if (event.target?.closest?.('#st-story-phone-launcher')) {
+                event.preventDefault();
+                event.stopPropagation();
+                openPhone();
+            }
+        }, true);
+        makeBubble();
+        try {
+            mountDiagnosticsPanel();
+            setInterval(mountDiagnosticsPanel, 2000);
+        } catch (error) {
+            console.warn('ST-StoryPhone diagnostics panel failed', error);
+        }
         getCore().then(function (core) {
             if (!core) return;
-            import(BRIDGE_SCRIPT + '?v=0.3.0').then(function (bridge) {
+            import(BRIDGE_SCRIPT + '?v=' + EXTENSION_VERSION).then(function (bridge) {
                 bridge.installGenerateInterceptor(function (speakerId) {
                     return core.mainContextSummary(speakerId);
                 });

@@ -2,6 +2,14 @@ import { generateQuiet, getCurrentCharacterSummary, getPersonaSummary, getRecent
 
 const STORAGE_KEY = 'st_story_phone_v2_state';
 
+function tryParseJson(text, fallback) {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return fallback;
+    }
+}
+
 export const SOURCES = {
     MAIN_CHAT: 'main_chat',
     WECHAT: 'phone_wechat',
@@ -49,6 +57,8 @@ export function createDefaultState() {
         phoneEvents: [],
         settings: {
             apiEndpoint: localStorage.getItem('st_story_phone_api_endpoint') || '',
+            apiKey: localStorage.getItem('st_story_phone_api_key') || '',
+            apiModel: localStorage.getItem('st_story_phone_api_model') || '',
             fallbackEnabled: false,
             injectIntoMainContext: true,
         },
@@ -88,7 +98,15 @@ export class StoryPhoneCore {
 
     load() {
         try {
-            return { ...createDefaultState(), ...(JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {}) };
+            const defaults = createDefaultState();
+            const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {};
+            return {
+                ...defaults,
+                ...stored,
+                settings: { ...defaults.settings, ...(stored.settings || {}) },
+                phone: { ...defaults.phone, ...(stored.phone || {}) },
+                profile: { ...defaults.profile, ...(stored.profile || {}) },
+            };
         } catch {
             return createDefaultState();
         }
@@ -195,18 +213,92 @@ export class StoryPhoneCore {
 
         if (this.state.settings.apiEndpoint) {
             try {
-                const response = await fetch(this.state.settings.apiEndpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taskType, payload, visibleContext, prompt }),
-                });
-                return { ok: true, text: await response.text() };
+                const data = await this.callConfiguredApi(prompt, { taskType, payload, visibleContext });
+                return { ok: true, text: typeof data === 'string' ? data : JSON.stringify(data) };
             } catch (error) {
-                return { ok: false, message: '自定义 API 调用失败' };
+                return { ok: false, message: `自定义 API 调用失败：${error.message}` };
             }
         }
 
         return generateQuiet(prompt);
+    }
+
+    getApiHeaders() {
+        const headers = { 'Content-Type': 'application/json' };
+        if (this.state.settings.apiKey) headers.Authorization = `Bearer ${this.state.settings.apiKey}`;
+        return headers;
+    }
+
+    getChatCompletionsUrl() {
+        const endpoint = String(this.state.settings.apiEndpoint || '').trim().replace(/\/+$/, '');
+        if (!endpoint) return '';
+        if (endpoint.endsWith('/chat/completions')) return endpoint;
+        if (endpoint.endsWith('/v1')) return `${endpoint}/chat/completions`;
+        if (endpoint.includes('/v1/')) return `${endpoint}/chat/completions`;
+        return `${endpoint}/v1/chat/completions`;
+    }
+
+    async callConfiguredApi(prompt, extra = {}) {
+        if (!this.state.settings.apiEndpoint) throw new Error('API URL 为空');
+
+        if (!this.state.settings.apiModel) {
+            const response = await fetch(this.state.settings.apiEndpoint, {
+                method: 'POST',
+                headers: this.getApiHeaders(),
+                body: JSON.stringify({ ...extra, prompt }),
+            });
+            const raw = await response.text();
+            const data = tryParseJson(raw, { text: raw });
+            if (!response.ok) throw new Error(data.error?.message || `${response.status} ${response.statusText}`);
+            return data;
+        }
+
+        const response = await fetch(this.getChatCompletionsUrl(), {
+            method: 'POST',
+            headers: this.getApiHeaders(),
+            body: JSON.stringify({
+                model: this.state.settings.apiModel,
+                messages: [
+                    { role: 'system', content: '你是 ST-StoryPhone 手机后台生成器。只输出 JSON，不要 Markdown。' },
+                    { role: 'user', content: prompt },
+                ],
+                temperature: 0.7,
+            }),
+        });
+        const raw = await response.text();
+        const data = tryParseJson(raw, { text: raw });
+        if (!response.ok) throw new Error(data.error?.message || `${response.status} ${response.statusText}`);
+        return data.choices?.[0]?.message?.content || data;
+    }
+
+    async testApiConnection() {
+        if (!this.state.settings.apiEndpoint) return { ok: false, message: '请先填写 API URL' };
+        try {
+            if (this.state.settings.apiModel) {
+                await this.callConfiguredApi('请只输出 {"ok":true,"message":"pong"}。', { taskType: 'connection_test' });
+                return { ok: true, message: 'API 测试成功' };
+            }
+
+            const response = await fetch(this.state.settings.apiEndpoint, {
+                method: 'POST',
+                headers: this.getApiHeaders(),
+                body: JSON.stringify({ taskType: 'connection_test', payload: {}, prompt: 'ping' }),
+            });
+            if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+            return { ok: true, message: 'API 测试成功' };
+        } catch (error) {
+            return { ok: false, message: `API 测试失败：${error.message}` };
+        }
+    }
+
+    setApiSettings({ endpoint, key, model }) {
+        this.state.settings.apiEndpoint = endpoint || '';
+        this.state.settings.apiKey = key || '';
+        this.state.settings.apiModel = model || '';
+        localStorage.setItem('st_story_phone_api_endpoint', this.state.settings.apiEndpoint);
+        localStorage.setItem('st_story_phone_api_key', this.state.settings.apiKey);
+        localStorage.setItem('st_story_phone_api_model', this.state.settings.apiModel);
+        this.save();
     }
 
     setApiEndpoint(endpoint) {
