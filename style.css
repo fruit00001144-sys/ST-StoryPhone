@@ -76,6 +76,11 @@
     padding: 14px;
 }
 
+.stp-screen:has(.stp-app) {
+    padding: 0;
+    background: #f5f5f5;
+}
+
 .stp-bubble {
     width: 74px;
     height: 74px;
@@ -158,7 +163,7 @@
     padding: 7px 0;
     border-radius: 13px;
     background: var(--stp-blue);
-    font-size: 11px;
+    font-size: 22px;
     font-weight: 900;
 }
 
@@ -169,27 +174,44 @@
 
 .stp-app {
     display: flex;
+    height: 100%;
     min-height: 100%;
     flex-direction: column;
-    gap: 12px;
+    overflow: hidden;
+    background: #f5f5f5;
 }
 
 .stp-nav {
     position: sticky;
-    top: -14px;
+    top: 0;
     z-index: 1;
-    display: flex;
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
     align-items: center;
-    gap: 10px;
-    margin: -14px -14px 0;
-    padding: 12px 14px;
-    background: rgba(248, 253, 255, 0.92);
+    margin: 0;
+    padding: 10px 10px;
+    background: rgba(247, 247, 247, 0.96);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--stp-line);
 }
 
 .stp-nav strong {
-    font-size: 15px;
+    justify-self: center;
+    color: #111;
+    font-size: 17px;
+    font-weight: 800;
+}
+
+.stp-app-close {
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #111;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
 }
 
 .stp-pixel-button,
@@ -219,33 +241,47 @@
     box-shadow: 2px 2px 0 rgba(36, 49, 79, 0.6);
 }
 
+.stp-wechat-app {
+    background: #ededed;
+    color: #111;
+}
+
+.stp-wechat-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .stp-chat-layout {
     display: grid;
-    grid-template-columns: 104px 1fr;
-    gap: 10px;
-    min-height: 460px;
+    grid-template-columns: 112px 1fr;
+    height: 100%;
+    min-height: 0;
+    background: #ededed;
 }
 
 .stp-friend-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
     overflow: auto;
+    border-right: 1px solid #ddd;
+    background: #f7f7f7;
 }
 
 .stp-friend {
-    border: 2px solid var(--stp-line);
-    border-radius: 16px;
+    border: 0;
+    border-bottom: 1px solid #e3e3e3;
+    border-radius: 0;
     padding: 10px 8px;
-    background: rgba(255, 255, 255, 0.68);
-    color: var(--stp-ink);
+    background: transparent;
+    color: #111;
     text-align: left;
     cursor: pointer;
 }
 
 .stp-friend.active {
-    background: var(--stp-mint);
-    border-color: rgba(36, 49, 79, 0.42);
+    background: #e9e9e9;
 }
 
 .stp-friend b,
@@ -262,24 +298,30 @@
 .stp-chat-pane {
     display: flex;
     min-width: 0;
+    min-height: 0;
     flex-direction: column;
-    gap: 10px;
+    background: #ededed;
 }
 
 .stp-chat-pane h3 {
     margin: 0;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+    background: #f7f7f7;
+    color: #111;
     font-size: 15px;
+    text-align: center;
 }
 
 .stp-messages {
     flex: 1;
-    min-height: 330px;
-    max-height: 420px;
+    min-height: 0;
+    max-height: none;
     overflow: auto;
-    padding: 10px;
-    border: 2px solid var(--stp-line);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.56);
+    padding: 14px 10px;
+    border: 0;
+    border-radius: 0;
+    background: #ededed;
 }
 
 .stp-message {
@@ -287,19 +329,20 @@
     max-width: 86%;
     margin-bottom: 8px;
     padding: 9px 11px;
-    border-radius: 14px;
-    font-size: 13px;
+    border-radius: 6px;
+    color: #111;
+    font-size: 14px;
     line-height: 1.45;
 }
 
 .stp-message.me {
     margin-left: auto;
-    background: var(--stp-blue);
+    background: #95ec69;
 }
 
 .stp-message.npc {
     background: #fff;
-    border: 1px solid var(--stp-line);
+    border: 0;
 }
 
 .stp-reply-box,
@@ -310,6 +353,9 @@
 
 .stp-reply-box {
     flex-wrap: wrap;
+    padding: 8px;
+    border-top: 1px solid #ddd;
+    background: #f7f7f7;
 }
 
 .stp-reply-box input,
@@ -326,7 +372,125 @@
 }
 
 .stp-reply-box input {
-    flex: 1 1 100%;
+    flex: 1 1 150px;
+    border: 0;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.stp-avatar {
+    display: grid !important;
+    width: 36px;
+    height: 36px;
+    margin: 0 0 6px;
+    place-items: center;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 20px !important;
+    opacity: 1 !important;
+}
+
+.stp-wechat-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid #d8d8d8;
+    background: #f7f7f7;
+}
+
+.stp-wechat-tabs button {
+    border: 0;
+    background: transparent;
+    color: #444;
+    padding: 6px 0 5px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.stp-wechat-tabs button span,
+.stp-wechat-tabs button b {
+    display: block;
+}
+
+.stp-wechat-tabs button span {
+    font-size: 20px;
+    line-height: 1.05;
+}
+
+.stp-wechat-tabs button b {
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.stp-wechat-tabs button.active {
+    color: #07c160;
+}
+
+.stp-wechat-discover,
+.stp-wechat-list {
+    height: 100%;
+    overflow: auto;
+    background: #ededed;
+    padding: 10px 0;
+}
+
+.stp-wechat-discover-row,
+.stp-wechat-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    border-bottom: 1px solid #eee;
+    background: #fff;
+    color: #111;
+    padding: 13px 14px;
+    text-align: left;
+}
+
+.stp-wechat-discover-row span,
+.stp-wechat-row .stp-avatar {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: #f4f4f4;
+    font-size: 22px;
+}
+
+.stp-wechat-discover-row b,
+.stp-wechat-row b {
+    display: block;
+    font-size: 16px;
+}
+
+.stp-wechat-discover-row small,
+.stp-wechat-row small {
+    color: #999;
+    font-size: 12px;
+}
+
+.stp-wechat-discover-row i {
+    color: #bbb;
+    font-style: normal;
+    font-size: 22px;
+}
+
+.stp-moments-list {
+    height: calc(100% - 50px);
+    overflow: auto;
+    gap: 0;
+    background: #fff;
+}
+
+.stp-wide-action.wechat-refresh {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #fff;
+    color: #07c160;
 }
 
 .stp-card-list {
@@ -472,9 +636,18 @@
         grid-template-columns: 1fr;
     }
 
+    .stp-wechat-app .stp-chat-layout {
+        grid-template-columns: 104px 1fr;
+    }
+
     .stp-friend-list {
         flex-direction: row;
         overflow-x: auto;
+    }
+
+    .stp-wechat-app .stp-friend-list {
+        flex-direction: column;
+        overflow: auto;
     }
 
     .stp-friend {

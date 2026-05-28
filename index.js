@@ -2,7 +2,7 @@
     'use strict';
 
     var EXTENSION_ID = 'ST-StoryPhone';
-    var EXTENSION_VERSION = '0.3.2';
+    var EXTENSION_VERSION = '0.3.3';
     var MODULE_BASE = new URL('.', import.meta.url).href;
     var APP_SCRIPT = new URL('app.js', MODULE_BASE).href;
     var CORE_SCRIPT = new URL('core.js', MODULE_BASE).href;
@@ -230,7 +230,8 @@
             '<span style="width:74px;height:22px;border-radius:999px;background:rgba(36,49,79,.86);box-shadow:inset 16px 0 0 rgba(255,255,255,.16);"></span>',
             '<button id="st-story-phone-fallback-close" type="button" style="justify-self:end;width:30px;height:24px;border:2px solid #24314f;border-radius:8px;background:#fff9df;font-weight:900;">×</button>',
             '</div>',
-            '<div style="height:calc(100% - 54px);margin:0 12px 12px;border:3px solid rgba(36,49,79,.22);border-radius:28px;background:linear-gradient(90deg,rgba(255,255,255,.24) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.24) 1px,transparent 1px),linear-gradient(180deg,#f8fdff,#fff5fb 52%,#fffbea);background-size:18px 18px,18px 18px,auto;overflow:auto;padding:14px;box-sizing:border-box;">',
+            '<div id="st-story-phone-fallback-screen" style="height:calc(100% - 54px);margin:0 12px 12px;border:3px solid rgba(36,49,79,.22);border-radius:28px;background:linear-gradient(90deg,rgba(255,255,255,.24) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.24) 1px,transparent 1px),linear-gradient(180deg,#f8fdff,#fff5fb 52%,#fffbea);background-size:18px 18px,18px 18px,auto;overflow:hidden;box-sizing:border-box;">',
+            '<div id="st-story-phone-fallback-home" style="height:100%;overflow:auto;padding:14px;box-sizing:border-box;">',
             '<div id="st-story-phone-home-card" style="border:2px solid rgba(36,49,79,.14);border-radius:24px;padding:18px;background:radial-gradient(circle at top right,rgba(113,207,255,.45),transparent 34%),linear-gradient(135deg,rgba(255,211,229,.78),rgba(216,255,229,.78));box-shadow:inset 0 0 0 2px rgba(255,255,255,.5);">',
             '<div style="font-family:Georgia,serif;font-size:34px;line-height:.92;font-weight:900;letter-spacing:-.06em;text-shadow:2px 2px 0 #fff;">Phoning<br>Phone</div>',
             '<div style="margin-top:10px;font-size:12px;font-weight:900;">ST-StoryPhone fallback shell</div>',
@@ -244,11 +245,12 @@
             appButtonHtml('备忘录', '📝'),
             appButtonHtml('目标手机', '📱'),
             '</div>',
-            '<div id="st-story-phone-fallback-view" style="margin-top:14px;border:2px solid rgba(36,49,79,.14);border-radius:18px;background:rgba(255,255,255,.72);padding:0;font-size:13px;line-height:1.5;overflow:hidden;">点一个应用开始。后台生成接口未接入时，不会把内容写入主聊天。</div>',
             '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">',
             '<button id="st-story-phone-fallback-load" type="button" style="border:2px solid #24314f;border-radius:10px;background:#fff9df;font-weight:900;box-shadow:3px 3px 0 #24314f;padding:7px 10px;">重试完整手机</button>',
             '<button id="st-story-phone-fallback-bubble" type="button" style="border:2px solid #24314f;border-radius:10px;background:#fff;font-weight:900;box-shadow:2px 2px 0 rgba(36,49,79,.6);padding:7px 10px;">显示气泡</button>',
             '</div>',
+            '</div>',
+            '<div id="st-story-phone-fallback-view" style="display:none;height:100%;background:#f5f5f5;color:#111;font-size:13px;line-height:1.5;overflow:hidden;"></div>',
             '</div>',
         ].join('');
         document.body.appendChild(panel);
@@ -276,8 +278,7 @@
     }
 
     function renderFallbackApp(label) {
-        var view = document.getElementById('st-story-phone-fallback-view');
-        if (!view) return;
+        openFallbackAppShell(label);
         if (label === '微信' || label === '朋友圈') return renderFallbackWechat(label === '朋友圈' ? 'moments' : 'list');
         if (label === '论坛') return renderFallbackForum();
         if (label === '日历') return renderSimpleApp('📅 日历', '今天：剧情时间同步主线。<br>未来暗线：等待主剧情推进，不提前泄露。');
@@ -285,33 +286,67 @@
         if (label === '目标手机') return renderSimpleApp('📱 目标手机', '只读模式。这里将展示目标角色可见范围内的消息、备忘录和日历。');
     }
 
-    function renderFallbackWechat(tab) {
+    function openFallbackAppShell(title) {
+        var home = document.getElementById('st-story-phone-fallback-home');
         var view = document.getElementById('st-story-phone-fallback-view');
+        if (!view) return;
+        if (home) home.style.display = 'none';
+        view.style.display = 'flex';
+        view.style.flexDirection = 'column';
+        view.innerHTML = '<div style="height:46px;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;background:#f7f7f7;border-bottom:1px solid #ddd;"><button id="stp-app-close" type="button" style="border:0;background:transparent;font-size:26px;color:#111;">×</button><strong style="text-align:center;font-size:17px;">' + title + '</strong><span></span></div><div id="stp-app-content" style="flex:1;min-height:0;overflow:hidden;background:#ededed;"></div>';
+        document.getElementById('stp-app-close').addEventListener('click', closeFallbackApp);
+    }
+
+    function closeFallbackApp() {
+        var home = document.getElementById('st-story-phone-fallback-home');
+        var view = document.getElementById('st-story-phone-fallback-view');
+        if (home) home.style.display = 'block';
+        if (view) {
+            view.style.display = 'none';
+            view.innerHTML = '';
+        }
+    }
+
+    function fallbackContent() {
+        return document.getElementById('stp-app-content') || document.getElementById('st-story-phone-fallback-view');
+    }
+
+    function renderFallbackWechat(tab) {
+        var view = fallbackContent();
         var fallbackState = getPhoneState();
         var chat = normalizeChatHistory(fallbackState.chats.char || []);
         fallbackState.chats.char = chat;
         savePhoneStatePatch({ chats: fallbackState.chats });
         var moments = fallbackState.moments || [];
-        var header = '<div style="height:46px;background:#ededed;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:18px;font-weight:700;"><button data-stp-wx-tab="list" style="border:0;background:transparent;font-size:20px;">‹</button><span>微信</span><span>＋</span></div>';
+        var tabs = '<div style="height:52px;display:grid;grid-template-columns:repeat(4,1fr);background:#f7f7f7;border-top:1px solid #ddd;"><button data-stp-wx-tab="list" style="border:0;background:transparent;color:#07c160;">💬<br><small>微信</small></button><button data-stp-wx-tab="contacts" style="border:0;background:transparent;">👥<br><small>通讯录</small></button><button data-stp-wx-tab="discover" style="border:0;background:transparent;">🧭<br><small>发现</small></button><button type="button" style="border:0;background:transparent;">🙂<br><small>我</small></button></div>';
         if (tab === 'list') {
             var rows = [
                 ['🐼', '目标角色', '刚刚的消息只在手机内。', '现在'],
                 ['🧑‍🎓', '同学A', '你看到论坛那个帖子了吗？', '5月16日'],
                 ['📷', '社团号', '活动室开放通知', '5月15日'],
-                ['🫧', '朋友圈', '发现页入口', ''],
             ];
-            view.innerHTML = header + rows.map(function (r) {
-                var target = r[1] === '朋友圈' ? 'moments' : 'chat';
+            view.innerHTML = '<div style="height:calc(100% - 52px);overflow:auto;background:#fff;">' + rows.map(function (r) {
+                var target = 'chat';
                 return '<button data-stp-wx-tab="' + target + '" style="width:100%;display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;border:0;border-bottom:1px solid #eee;background:#fff;padding:10px;text-align:left;color:#111;"><span style="width:44px;height:44px;border-radius:8px;background:#f4f4f4;display:grid;place-items:center;font-size:24px;">' + r[0] + '</span><span><strong style="display:block;font-size:16px;">' + r[1] + '</strong><small style="color:#999;">' + r[2] + '</small></span><small style="color:#aaa;">' + r[3] + '</small></button>';
-            }).join('');
+            }).join('') + '</div>' + tabs;
+            bindWechatTabs();
+            return;
+        }
+        if (tab === 'discover') {
+            view.innerHTML = '<div style="height:calc(100% - 52px);overflow:auto;background:#ededed;padding-top:10px;"><button data-stp-wx-tab="moments" style="width:100%;display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;border:0;border-bottom:1px solid #eee;background:#fff;padding:14px;text-align:left;color:#111;"><span style="font-size:24px;">🫧</span><span><strong style="display:block;font-size:16px;">朋友圈</strong><small style="color:#999;">查看剧情世界动态</small></span><span style="color:#bbb;font-size:22px;">›</span></button></div>' + tabs;
+            bindWechatTabs();
+            return;
+        }
+        if (tab === 'contacts') {
+            view.innerHTML = '<div style="height:calc(100% - 52px);overflow:auto;background:#fff;"><button data-stp-wx-tab="chat" style="width:100%;display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;border:0;border-bottom:1px solid #eee;background:#fff;padding:10px;text-align:left;color:#111;"><span style="width:44px;height:44px;border-radius:8px;background:#f4f4f4;display:grid;place-items:center;font-size:24px;">🐼</span><span><strong style="display:block;font-size:16px;">目标角色</strong><small style="color:#999;">角色卡主角</small></span><span style="color:#bbb;">›</span></button></div>' + tabs;
             bindWechatTabs();
             return;
         }
         if (tab === 'moments') {
-            view.innerHTML = '<div style="height:46px;background:#ededed;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:18px;font-weight:700;"><button data-stp-wx-tab="list" style="border:0;background:transparent;font-size:20px;">‹</button><span>朋友圈</span><span>📷</span></div>' +
+            view.innerHTML = '<div style="height:calc(100% - 52px);overflow:auto;background:#fff;">' +
                 moments.map(function (m, i) {
                     return '<article style="display:grid;grid-template-columns:44px 1fr;gap:10px;border-bottom:1px solid #eee;background:#fff;padding:12px;"><div style="width:40px;height:40px;border-radius:6px;background:#f4f4f4;display:grid;place-items:center;font-size:22px;">' + (m.avatar || '👤') + '</div><div><strong style="color:#596b8d;font-size:15px;">' + m.author + '</strong><p style="margin:5px 0 8px;color:#111;font-size:15px;">' + m.text + '</p><small style="color:#aaa;">刚刚</small><button data-like="' + i + '" style="float:right;border:0;background:#f6f6f6;border-radius:4px;padding:2px 8px;">' + (m.liked ? '已赞' : '♡') + '</button><button data-comment="' + i + '" style="float:right;border:0;background:#f6f6f6;border-radius:4px;padding:2px 8px;margin-right:4px;">评论</button><div style="clear:both;margin-top:8px;background:#f3f3f3;border-radius:4px;padding:6px;color:#596b8d;">' + (m.liked ? '<div>我 觉得很赞</div>' : '') + m.comments.map(function (c) { return '<div><b>我：</b>' + c + '</div>'; }).join('') + '</div></div></article>';
-                }).join('');
+                }).join('') + '</div>' + tabs;
             bindWechatTabs();
             Array.prototype.forEach.call(view.querySelectorAll('[data-like]'), function (button) {
                 button.addEventListener('click', function () {
@@ -333,9 +368,9 @@
             });
             return;
         }
-        view.innerHTML = '<div style="height:46px;background:#ededed;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:16px;font-weight:700;"><button data-stp-wx-tab="list" style="border:0;background:transparent;font-size:20px;">‹</button><span>目标角色</span><span>⋯</span></div><div style="display:flex;flex-direction:column;gap:10px;height:260px;overflow:auto;background:#ededed;padding:12px;">' +
+        view.innerHTML = '<div style="height:calc(100% - 104px);display:flex;flex-direction:column;gap:10px;overflow:auto;background:#ededed;padding:12px;">' +
             chat.map(function (m) { return '<div style="align-self:' + (m.sender === 'npc' ? 'flex-start' : 'flex-end') + ';display:flex;gap:8px;max-width:90%;"><span style="order:' + (m.sender === 'npc' ? 0 : 2) + ';width:30px;height:30px;border-radius:4px;background:#fff;display:grid;place-items:center;">' + (m.sender === 'npc' ? '👤' : '我') + '</span><span style="background:' + (m.sender === 'npc' ? '#fff' : '#95ec69') + ';border-radius:6px;padding:8px 10px;color:#111;text-align:left;">' + escapeHtml(m.text || m.content || '') + '</span></div>'; }).join('') +
-            '</div><form id="stp-demo-chat-form" autocomplete="off" style="display:flex;gap:8px;background:#f7f7f7;padding:8px;"><button type="button">🎙</button><input name="msg" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="" style="flex:1;border:0;border-radius:4px;padding:8px;background:#fff;"><button type="button">😊</button><button>＋</button></form>';
+            '</div><form id="stp-demo-chat-form" autocomplete="off" style="height:52px;display:flex;gap:8px;background:#f7f7f7;padding:8px;box-sizing:border-box;"><button type="button">🎙</button><input name="msg" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="" style="flex:1;border:0;border-radius:4px;padding:8px;background:#fff;"><button type="button">😊</button><button>＋</button></form>' + tabs;
         bindWechatTabs();
         document.getElementById('stp-demo-chat-form').addEventListener('submit', function (event) {
             event.preventDefault();
@@ -357,12 +392,12 @@
     }
 
     function renderFallbackForum() {
-        var view = document.getElementById('st-story-phone-fallback-view');
+        var view = fallbackContent();
         var fallbackState = getPhoneState();
         var posts = fallbackState.forumPosts || [];
-        view.innerHTML = '<div style="height:46px;background:#f7f7f7;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800;"><span>‹</span><span>论坛</span><button id="stp-forum-refresh">刷新</button></div>' + posts.map(function (p, i) {
+        view.innerHTML = '<div style="height:46px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800;border-bottom:1px solid #e8e8e8;"><span style="color:#1f3f73;">论坛</span><button id="stp-forum-refresh">刷新</button></div><div style="height:calc(100% - 46px);overflow:auto;background:#f2f3f5;">' + posts.map(function (p, i) {
             return '<article style="background:#fff;border-bottom:8px solid #f2f3f5;padding:12px;"><strong style="font-size:16px;color:#1f3f73;">' + p.title + '</strong><p style="color:#222;">' + p.body + '</p>' + p.floors.map(function (f) { return '<div style="border-top:1px solid #eee;padding:8px 0;color:#333;">' + f + '</div>'; }).join('') + '<button data-floor="' + i + '">回复楼层</button></article>';
-        }).join('');
+        }).join('') + '</div>';
         document.getElementById('stp-forum-refresh').addEventListener('click', function () {
             posts.unshift({ title: '新的讨论串正在生成…', body: getApiConfigured() ? '已请求扩展 API。' : '后台生成接口未接入，显示本地占位。', floors: ['1L：先观察，不要默认全员知道。'] });
             savePhoneStatePatch({ forumPosts: posts });
@@ -383,10 +418,10 @@
     }
 
     function renderMemoApp() {
-        var view = document.getElementById('st-story-phone-fallback-view');
+        var view = fallbackContent();
         var fallbackState = getPhoneState();
         var memos = fallbackState.memos || [];
-        view.innerHTML = '<div style="background:#f7f2df;min-height:320px;padding:14px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:center;"><strong style="font-size:22px;">备忘录</strong><span>📝</span></div><form id="stp-demo-memo-form" style="display:flex;gap:6px;margin:12px 0;"><input name="memo" placeholder="保存线索..." style="flex:1;border:0;border-radius:10px;padding:10px;background:#fffdf5;"><button style="border:0;background:#ffd84d;border-radius:10px;padding:0 12px;">保存</button></form>' + memos.map(function (m) { return '<p style="background:#fffdf5;border-radius:12px;padding:10px;box-shadow:0 1px 0 rgba(0,0,0,.06);">' + m + '</p>'; }).join('') + '</div>';
+        view.innerHTML = '<div style="height:100%;overflow:auto;background:#f7f2df;padding:14px;color:#111;box-sizing:border-box;"><div style="display:flex;justify-content:space-between;align-items:center;"><strong style="font-size:28px;">备忘录</strong><span>📝</span></div><form id="stp-demo-memo-form" style="display:flex;gap:6px;margin:12px 0;"><input name="memo" placeholder="保存线索..." style="flex:1;border:0;border-radius:10px;padding:10px;background:#fffdf5;"><button style="border:0;background:#ffd84d;border-radius:10px;padding:0 12px;">保存</button></form>' + memos.map(function (m) { return '<p style="background:#fffdf5;border-radius:12px;padding:12px;box-shadow:0 1px 0 rgba(0,0,0,.06);">' + m + '</p>'; }).join('') + '</div>';
         document.getElementById('stp-demo-memo-form').addEventListener('submit', function (event) {
             event.preventDefault();
             var text = event.target.memo.value.trim();
@@ -399,8 +434,8 @@
     }
 
     function renderSimpleApp(title, body) {
-        var view = document.getElementById('st-story-phone-fallback-view');
-        if (view) view.innerHTML = '<strong>' + title + '</strong><p>' + body + '</p>';
+        var view = fallbackContent();
+        if (view) view.innerHTML = '<div style="height:100%;overflow:auto;background:#fff;padding:18px;box-sizing:border-box;color:#111;"><strong style="font-size:24px;">' + title + '</strong><p>' + body + '</p></div>';
     }
 
     function getApiConfigured() {

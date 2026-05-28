@@ -1081,8 +1081,9 @@ class PhoneUI {
 
     nav(title) {
         const bar = createElement('div', 'stp-nav');
-        const back = createElement('button', 'stp-pixel-button', 'Home');
+        const back = createElement('button', 'stp-app-close', '×');
         back.type = 'button';
+        back.setAttribute('aria-label', '关闭应用，回到手机桌面');
         back.addEventListener('click', () => this.setApp('home'));
         const heading = createElement('strong', '', title);
         bar.append(back, heading);
@@ -1099,13 +1100,12 @@ class PhoneUI {
         `;
         const grid = createElement('div', 'stp-app-grid');
         [
-            ['wechat', '微信', 'chat'],
-            ['moments', '朋友圈', 'moments'],
-            ['forum', profile.forum?.name || '论坛', 'forum'],
-            ['calendar', '日历', 'calendar'],
-            ['memos', '备忘录', 'memo'],
-            ['target', '查看目标角色手机', 'phone'],
-            ['settings', '设置', 'gear'],
+            ['wechat', '微信', '💬'],
+            ['forum', profile.forum?.name || '论坛', '📌'],
+            ['calendar', '日历', '📅'],
+            ['memos', '备忘录', '📝'],
+            ['target', '查看目标角色手机', '📱'],
+            ['settings', '设置', '⚙️'],
         ].forEach(([app, label, icon]) => {
             const button = createElement('button', 'stp-app-icon', '');
             button.type = 'button';
@@ -1118,8 +1118,59 @@ class PhoneUI {
 
     renderWechat(profile) {
         this.screen.innerHTML = '';
-        const wrap = createElement('div', 'stp-app');
+        const wrap = createElement('div', 'stp-app stp-wechat-app');
         wrap.append(this.nav('微信'));
+        const body = createElement('div', 'stp-wechat-body');
+        const activeTab = this.wechatTab || 'chats';
+
+        if (activeTab === 'discover') {
+            const discover = createElement('div', 'stp-wechat-discover');
+            const momentsButton = createElement('button', 'stp-wechat-discover-row', '');
+            momentsButton.type = 'button';
+            momentsButton.innerHTML = '<span>🫧</span><b>朋友圈</b><small>查看剧情世界里的动态</small><i>›</i>';
+            momentsButton.addEventListener('click', () => {
+                this.wechatTab = 'moments';
+                this.renderWechat(profile);
+            });
+            discover.append(momentsButton);
+            body.append(discover);
+            wrap.append(body, this.wechatTabs(profile));
+            this.screen.append(wrap);
+            return;
+        }
+
+        if (activeTab === 'moments') {
+            const action = createElement('button', 'stp-wide-action wechat-refresh', '生成/刷新朋友圈');
+            action.type = 'button';
+            action.addEventListener('click', () => this.generateMoments());
+            const list = createElement('div', 'stp-card-list stp-moments-list');
+            this.state.value.phone.moments.forEach((post) => list.append(this.renderSocialCard(post, 'moment')));
+            if (!this.state.value.phone.moments.length) list.append(createElement('p', 'stp-empty', '还没有动态。点击刷新会基于主剧情状态后台生成。'));
+            body.append(action, list);
+            wrap.append(body, this.wechatTabs(profile));
+            this.screen.append(wrap);
+            return;
+        }
+
+        if (activeTab === 'contacts') {
+            const contacts = createElement('div', 'stp-wechat-list');
+            asArray(profile.friends).forEach((friend) => {
+                const item = createElement('button', 'stp-wechat-row', '');
+                item.type = 'button';
+                item.innerHTML = `<span class="stp-avatar">${friend.avatar || '👤'}</span><b>${friend.name}</b><small>${friend.role || 'NPC'}</small>`;
+                item.addEventListener('click', () => {
+                    this.selectedNpc = friend.id;
+                    this.wechatTab = 'chats';
+                    this.renderWechat(profile);
+                });
+                contacts.append(item);
+            });
+            body.append(contacts);
+            wrap.append(body, this.wechatTabs(profile));
+            this.screen.append(wrap);
+            return;
+        }
+
         const layout = createElement('div', 'stp-chat-layout');
         const list = createElement('div', 'stp-friend-list');
         const friends = asArray(profile.friends);
@@ -1128,7 +1179,7 @@ class PhoneUI {
         friends.forEach((friend) => {
             const item = createElement('button', `stp-friend ${friend.id === this.selectedNpc ? 'active' : ''}`, '');
             item.type = 'button';
-            item.innerHTML = `<b>${friend.name}</b><span>${friend.role || 'NPC'}</span>`;
+            item.innerHTML = `<span class="stp-avatar">${friend.avatar || '👤'}</span><b>${friend.name}</b><span>${friend.role || 'NPC'}</span>`;
             item.addEventListener('click', () => {
                 this.selectedNpc = friend.id;
                 this.renderWechat(profile);
@@ -1173,8 +1224,33 @@ class PhoneUI {
             chatPane.append(createElement('h3', '', current.name), messages, form);
         }
         layout.append(list, chatPane);
-        wrap.append(layout);
+        body.append(layout);
+        wrap.append(body, this.wechatTabs(profile));
         this.screen.append(wrap);
+    }
+
+    wechatTabs(profile) {
+        const tabs = createElement('div', 'stp-wechat-tabs');
+        [
+            ['chats', '💬', '微信'],
+            ['contacts', '👥', '通讯录'],
+            ['discover', '🧭', '发现'],
+            ['me', '🙂', '我'],
+        ].forEach(([id, icon, label]) => {
+            const button = createElement('button', `${this.wechatTab === id || (!this.wechatTab && id === 'chats') ? 'active' : ''}`, '');
+            button.type = 'button';
+            button.innerHTML = `<span>${icon}</span><b>${label}</b>`;
+            button.addEventListener('click', () => {
+                if (id === 'me') {
+                    this.showNotice('个人页后续会接入 persona 与手机设置');
+                    return;
+                }
+                this.wechatTab = id;
+                this.renderWechat(profile);
+            });
+            tabs.append(button);
+        });
+        return tabs;
     }
 
     pushChat(friend, message) {
